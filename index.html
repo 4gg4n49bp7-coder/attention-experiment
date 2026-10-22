@@ -6,8 +6,8 @@
 </style></head><body><main>
 <h1>数字抹消課題</h1>
 <section id="setup"><h2>実施前の設定</h2>
-<label>参加者ID（氏名は入力しない）<input id="participant" maxlength="40" placeholder="例：S001"></label>
-<label>課題セット <select id="set"><option value="A">A</option><option value="B">B</option></select></label>
+<p><strong>実験用ID：</strong><span id="participantDisplay"></span></p><p class="muted" id="idStatus"></p><input type="hidden" id="participant">
+<p>課題セット：<strong id="setDisplay"></strong><select id="set" class="hidden"><option value="A">A</option><option value="B">B</option></select></p>
 <label>測定時点 <select id="phase"><option value="pre">事前</option><option value="post">事後</option></select></label>
 <p>画面に並ぶ数字から <strong>3 と 7</strong> を探してクリックしてください。選択した数字をもう一度押すと解除できます。左から右へ順番に探し、行を最後まで確認したら「次の行へ」を押します。最後の行を途中まで見た場合は、最後に確認した数字を押して位置を記録してください（選択状態とは別の操作です）。制限時間は3分です。</p>
 <p>各セットは60行×20個＝1,200数字で、標的は240個です。A・Bの標的配置は異なります。</p>
@@ -21,6 +21,25 @@
 "use strict";
 const $=id=>document.getElementById(id), TOTAL=1200, WIDTH=20, LIMIT=180000;
 const SHEET_URL="https://script.google.com/macros/s/AKfycbxQMeBSFiSCG8y6tRvxha0l0_wecDzEYXujx-Y6hsqiMAsY10uecDL5Ts6K6pciI0SIvw/exec";
+const ID_KEY="attention_experiment_id_v1";
+let participantId="",idPersistent=false;
+function initializeId(){
+  try{const existing=localStorage.getItem(ID_KEY);if(existing&&/^P[0-9A-F]{16}$/.test(existing)){participantId=existing;idPersistent=true;}}
+  catch(err){}
+  if(!participantId){const bytes=new Uint8Array(8);crypto.getRandomValues(bytes);participantId="P"+Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").toUpperCase();
+    try{localStorage.setItem(ID_KEY,participantId);idPersistent=true;}catch(err){idPersistent=false;}
+  }
+  $("participant").value=participantId;
+  $("participantDisplay").textContent=participantId;
+  $("idStatus").textContent=idPersistent?"同じPC・同じブラウザーで再度開くと、このIDを引き継ぎます。":"このブラウザーではIDを保存できません。IDを控えてください。";
+  updateAssignedSet();
+}
+function updateAssignedSet(){
+  const parity=parseInt(participantId.slice(-1),16)%2;
+  const first=parity===1?"A":"B";
+  const assigned=$("phase").value==="pre"?first:(first==="A"?"B":"A");
+  $("set").value=assigned;$("setDisplay").textContent=assigned;
+}
 let digits=[],selected=new Set(),completedRows=0,lastChecked=-1,markMode=false,running=false,startAt=0,timer=null,record=null;
 function seeded(seed){let x=seed>>>0;return function(){x=(1664525*x+1013904223)>>>0;return x/4294967296}}
 function makeSet(name){const a=Array.from({length:TOTAL},(_,i)=>i<120?3:i<240?7:(i%8<6?i%8:i%8+2)); // 240 targets, 960 distractors
@@ -39,6 +58,8 @@ function finish(){if(!running)return;running=false;clearInterval(timer);let elap
  $("task").classList.add("hidden");$("results").classList.remove("hidden");
  const table=document.createElement("table");const labels={participant:"参加者ID",set:"課題セット",phase:"測定時点",duration_seconds:"実施秒数",processed:"確認済み数字数",unprocessed:"未処理数字数",targets_in_processed:"確認済み範囲の標的数",correct:"正しく選択した標的数",missed:"見逃し数",wrong:"誤選択数",accuracy:"標的検出率（参考・%）",timestamp:"実施日時"};
  for(const [key,label] of Object.entries(labels)){const tr=document.createElement("tr"),th=document.createElement("th"),td=document.createElement("td");th.textContent=label;td.textContent=record[key];tr.append(th,td);table.appendChild(tr)}$("summary").replaceChildren(table)}
+$("phase").addEventListener("change",updateAssignedSet);
+initializeId();
 $("start").addEventListener("click",start);
 $("next").addEventListener("click",()=>{if(!running)return;completedRows++;lastChecked=-1;markMode=false;$("markMsg").textContent="";if(completedRows>=60){finish();return}render()});
 $("mark").addEventListener("click",()=>{if(!running)return;markMode=true;$("markMsg").textContent="最後に確認した数字をクリックしてください（選択状態は変わりません）。"});
