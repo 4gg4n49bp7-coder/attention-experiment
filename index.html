@@ -15,7 +15,7 @@
 <section id="task" class="hidden"><div class="toolbar"><span>残り <span class="clock" id="clock">03:00</span></span><span id="progress">1 / 60行</span><button id="next">この行を確認完了・次の行へ</button><button id="end" class="danger">終了</button></div>
 <p class="muted">3と7を選択してください。選択済みは青色になります。</p><div id="rowTitle" class="row-title"></div><div id="digits" class="digits"></div>
 <p>現在の行を途中まで確認して終了する場合：</p><button id="mark" class="secondary">最後に確認した位置を指定</button><p id="markMsg" role="status" class="status"></p></section>
-<section id="results" class="hidden"><h2>結果</h2><div id="summary"></div><button id="send" class="secondary">保存を再試行</button><p id="sendMsg" class="status" role="status"></p><button id="csv">CSVを保存</button><button id="restart" class="secondary" disabled>次の測定へ進む</button><p class="muted">「見逃し」は確認済み範囲内で未選択だった標的です。未処理範囲は見逃しに含めません。クリック操作の速さも成績に影響するため、注意機能だけを純粋に測定するものではありません。</p></section>
+<section id="results" class="hidden"><h2>結果</h2><div id="summary"></div><button id="send" class="secondary">保存を再試行</button><p id="sendMsg" class="status" role="status"></p><button id="csv" class="secondary hidden">CSVを保存（予備）</button><button id="restart" class="secondary" disabled>次の測定へ進む</button><p class="muted">「見逃し」は確認済み範囲内で未選択だった標的です。未処理範囲は見逃しに含めません。クリック操作の速さも成績に影響するため、注意機能だけを純粋に測定するものではありません。</p></section>
 </main><script>
 (function(){
 "use strict";
@@ -72,7 +72,7 @@ function finish(){if(!running)return;running=false;clearInterval(timer);let elap
  saveState();showResults();autoSave();}
 function showResults(){
  $("setup").classList.add("hidden");$("task").classList.add("hidden");$("results").classList.remove("hidden");
- $("restart").disabled=true;$("send").disabled=true;$("restart").textContent=record.phase==="pre"?"事後測定へ進む":"全測定終了";
+ $("restart").disabled=true;$("send").disabled=true;$("csv").classList.add("hidden");$("restart").textContent=record.phase==="pre"?"事後測定へ進む":"全測定終了";
  const table=document.createElement("table");const labels={participant:"参加者ID",set:"課題セット",phase:"測定時点",duration_seconds:"実施秒数",processed:"確認済み数字数",unprocessed:"未処理数字数",targets_in_processed:"確認済み範囲の標的数",correct:"正しく選択した標的数",missed:"見逃し数",wrong:"誤選択数",accuracy:"標的検出率（参考・%）",timestamp:"実施日時"};
  for(const [key,label] of Object.entries(labels)){const tr=document.createElement("tr"),th=document.createElement("th"),td=document.createElement("td");th.textContent=label;td.textContent=record[key];tr.append(th,td);table.appendChild(tr)}$("summary").replaceChildren(table)}
 initializeId();
@@ -84,6 +84,7 @@ $("restart").addEventListener("click",()=>{if(!state.preSent||state.post)return;
 function newSubmissionId(){const a=new Uint8Array(16);crypto.getRandomValues(a);return "S"+Array.from(a,x=>x.toString(16).padStart(2,"0")).join("")}
 function ensureSubmissionId(r){if(!r.submission_id){r.submission_id=newSubmissionId();saveState()}}
 function savedUI(){
+ $("csv").classList.add("hidden");
  $("sendMsg").textContent="Googleスプレッドシートへの保存を確認しました。";
  $("send").disabled=true;
  $("restart").disabled=record.phase!=="pre";
@@ -123,11 +124,13 @@ async function autoSave(){
    if(phase==="pre")state.preSent=true;else state.postSent=true;
    saveState();savedUI();
   }else{
-   $("sendMsg").textContent="保存を確認できませんでした。通信状態を確認して「保存を再試行」を押してください。";
+   $("sendMsg").textContent="保存を確認できませんでした。通信状態を確認して「保存を再試行」を押してください。必要なら予備のCSVも保存できます。";
+   $("csv").classList.remove("hidden");
    $("send").disabled=false;
   }
  }catch(err){
-  $("sendMsg").textContent="通信に問題が発生しました。「保存を再試行」を押してください。";
+  $("sendMsg").textContent="通信に問題が発生しました。「保存を再試行」を押してください。必要なら予備のCSVも保存できます。";
+  $("csv").classList.remove("hidden");
   $("send").disabled=false;
  }finally{saving=false}
 }
