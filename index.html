@@ -8,20 +8,23 @@
 <section id="setup"><h2>実施前の設定</h2>
 <p><strong>実験用ID：</strong><span id="participantDisplay"></span></p><p class="muted" id="idStatus"></p><input type="hidden" id="participant">
 <p>課題セット：<strong id="setDisplay"></strong><select id="set" class="hidden"><option value="A">A</option><option value="B">B</option></select></p>
-<label>測定時点 <select id="phase"><option value="pre">事前</option><option value="post">事後</option></select></label>
+<p>測定時点：<strong id="phaseDisplay">事前</strong><select id="phase" class="hidden"><option value="pre">事前</option><option value="post">事後</option></select></p>
 <p>画面に並ぶ数字から <strong>3 と 7</strong> を探してクリックしてください。選択した数字をもう一度押すと解除できます。左から右へ順番に探し、行を最後まで確認したら「次の行へ」を押します。最後の行を途中まで見た場合は、最後に確認した数字を押して位置を記録してください（選択状態とは別の操作です）。制限時間は3分です。</p>
 <p>各セットは60行×20個＝1,200数字で、標的は240個です。A・Bの標的配置は異なります。</p>
 <button id="start">課題を開始</button><p id="setupMsg" class="status" role="status"></p></section>
 <section id="task" class="hidden"><div class="toolbar"><span>残り <span class="clock" id="clock">03:00</span></span><span id="progress">1 / 60行</span><button id="next">この行を確認完了・次の行へ</button><button id="end" class="danger">終了</button></div>
 <p class="muted">3と7を選択してください。選択済みは青色になります。</p><div id="rowTitle" class="row-title"></div><div id="digits" class="digits"></div>
 <p>現在の行を途中まで確認して終了する場合：</p><button id="mark" class="secondary">最後に確認した位置を指定</button><p id="markMsg" role="status" class="status"></p></section>
-<section id="results" class="hidden"><h2>結果</h2><div id="summary"></div><button id="send">スプレッドシートに送信</button><p id="sendMsg" class="status" role="status"></p><button id="csv">CSVを保存</button><button id="restart" class="secondary">別の測定を開始</button><p class="muted">「見逃し」は確認済み範囲内で未選択だった標的です。未処理範囲は見逃しに含めません。クリック操作の速さも成績に影響するため、注意機能だけを純粋に測定するものではありません。</p></section>
+<section id="results" class="hidden"><h2>結果</h2><div id="summary"></div><button id="send">スプレッドシートに送信</button><p id="sendMsg" class="status" role="status"></p><button id="csv">CSVを保存</button><button id="restart" class="secondary" disabled>次の測定へ進む</button><p class="muted">「見逃し」は確認済み範囲内で未選択だった標的です。未処理範囲は見逃しに含めません。クリック操作の速さも成績に影響するため、注意機能だけを純粋に測定するものではありません。</p></section>
 </main><script>
 (function(){
 "use strict";
 const $=id=>document.getElementById(id), TOTAL=1200, WIDTH=20, LIMIT=180000;
 const SHEET_URL="https://script.google.com/macros/s/AKfycbxQMeBSFiSCG8y6tRvxha0l0_wecDzEYXujx-Y6hsqiMAsY10uecDL5Ts6K6pciI0SIvw/exec";
-const ID_KEY="attention_experiment_id_v1";
+const ID_KEY="attention_experiment_id_v1", STATE_KEY="attention_experiment_state_v1";
+let state={pre:null,post:null,preSent:false,postSent:false};
+function saveState(){try{localStorage.setItem(STATE_KEY,JSON.stringify({id:participantId,...state}));return true}catch(e){return false}}
+function loadState(){try{const saved=JSON.parse(localStorage.getItem(STATE_KEY)||"null");if(saved&&saved.id===participantId){state={pre:saved.pre||null,post:saved.post||null,preSent:!!saved.preSent,postSent:!!saved.postSent}}}catch(e){}}
 let participantId="",idPersistent=false;
 function initializeId(){
   try{const existing=localStorage.getItem(ID_KEY);if(existing&&/^P[0-9A-F]{16}$/.test(existing)){participantId=existing;idPersistent=true;}}
@@ -32,15 +35,24 @@ function initializeId(){
   $("participant").value=participantId;
   $("participantDisplay").textContent=participantId;
   $("idStatus").textContent=idPersistent?"同じPC・同じブラウザーで再度開くと、このIDを引き継ぎます。":"このブラウザーではIDを保存できません。IDを控えてください。";
-  updateAssignedSet();
+  loadState();
+  restoreProgress();
 }
 function updateAssignedSet(){
+  $("phase").value=state.pre?"post":"pre";
+  $("phaseDisplay").textContent=state.pre?"事後":"事前";
   const parity=parseInt(participantId.slice(-1),16)%2;
   const first=parity===1?"A":"B";
   const assigned=$("phase").value==="pre"?first:(first==="A"?"B":"A");
   $("set").value=assigned;$("setDisplay").textContent=assigned;
 }
 let digits=[],selected=new Set(),completedRows=0,lastChecked=-1,markMode=false,running=false,startAt=0,timer=null,record=null;
+function restoreProgress(){
+ updateAssignedSet();
+ if(state.post){record=state.post;showResults();$("send").disabled=state.postSent;$("restart").disabled=true;$("restart").textContent="全測定終了";}
+ else if(state.pre&&!state.preSent){record=state.pre;showResults();$("restart").disabled=true;$("sendMsg").textContent="事前測定は終了しています。結果を送信してください。";}
+ else if(state.pre){$("restart").disabled=false;$("setupMsg").textContent="事前測定が終了しています。先生の指示があれば事後測定を開始してください。";}
+}
 function seeded(seed){let x=seed>>>0;return function(){x=(1664525*x+1013904223)>>>0;return x/4294967296}}
 function makeSet(name){const a=Array.from({length:TOTAL},(_,i)=>i<120?3:i<240?7:(i%8<6?i%8:i%8+2)); // 240 targets, 960 distractors
  const rand=seeded(name==="A"?1357911:2468022);
@@ -49,23 +61,26 @@ function render(){const row=completedRows; $("rowTitle").textContent="第"+(row+
  const frag=document.createDocumentFragment();
  for(let c=0;c<WIDTH;c++){const i=row*WIDTH+c,b=document.createElement("button");b.type="button";b.className="digit"+(selected.has(i)?" selected":"");b.textContent=digits[i];b.setAttribute("aria-label",(c+1)+"番目 "+digits[i]+(selected.has(i)?" 選択済み":""));b.addEventListener("click",()=>{if(!running)return;if(markMode){lastChecked=i;markMode=false;$("markMsg").textContent="確認位置："+(c+1)+"番目";return}if(selected.has(i))selected.delete(i);else selected.add(i);b.classList.toggle("selected",selected.has(i))});frag.appendChild(b)}$("digits").appendChild(frag)}
 function tick(){if(!running)return;let left=Math.max(0,LIMIT-(performance.now()-startAt)),sec=Math.ceil(left/1000);$("clock").textContent=String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0");if(left===0)finish()}
-function start(){if(running)return;const id=$("participant").value.trim();if(!id){$("setupMsg").textContent="参加者IDを入力してください。";return}
+function start(){if(running||state.post||state.pre&&!state.preSent)return;const id=$("participant").value.trim();if(!id){$("setupMsg").textContent="参加者IDを入力してください。";return}
 digits=makeSet($("set").value);selected=new Set();completedRows=0;lastChecked=-1;markMode=false;record=null;$("send").disabled=false;$("sendMsg").textContent="";running=true;$("setup").classList.add("hidden");$("results").classList.add("hidden");$("task").classList.remove("hidden");$("markMsg").textContent="";render();startAt=performance.now();tick();timer=setInterval(tick,100)}
 function finish(){if(!running)return;running=false;clearInterval(timer);let elapsed=Math.min(LIMIT,performance.now()-startAt);
  const checked=Math.min(TOTAL,Math.max(completedRows*WIDTH,lastChecked+1));let targets=0,correct=0,missed=0,wrong=0;
  for(let i=0;i<checked;i++){const target=digits[i]===3||digits[i]===7;if(target)targets++;if(selected.has(i)){if(target)correct++;else wrong++}else if(target)missed++}
  record={participant:$("participant").value.trim(),set:$("set").value,phase:$("phase").value,duration_seconds:(elapsed/1000).toFixed(2),processed:checked,unprocessed:TOTAL-checked,targets_in_processed:targets,correct,missed,wrong,accuracy:targets?((correct)/(targets)*100).toFixed(2):"",timestamp:new Date().toISOString()};
- $("task").classList.add("hidden");$("results").classList.remove("hidden");
+ if(record.phase==="pre")state.pre=record;else state.post=record;
+ saveState();showResults();}
+function showResults(){
+ $("setup").classList.add("hidden");$("task").classList.add("hidden");$("results").classList.remove("hidden");
+ $("restart").disabled=true;$("restart").textContent=record.phase==="pre"?"事後測定へ進む":"全測定終了";
  const table=document.createElement("table");const labels={participant:"参加者ID",set:"課題セット",phase:"測定時点",duration_seconds:"実施秒数",processed:"確認済み数字数",unprocessed:"未処理数字数",targets_in_processed:"確認済み範囲の標的数",correct:"正しく選択した標的数",missed:"見逃し数",wrong:"誤選択数",accuracy:"標的検出率（参考・%）",timestamp:"実施日時"};
  for(const [key,label] of Object.entries(labels)){const tr=document.createElement("tr"),th=document.createElement("th"),td=document.createElement("td");th.textContent=label;td.textContent=record[key];tr.append(th,td);table.appendChild(tr)}$("summary").replaceChildren(table)}
-$("phase").addEventListener("change",updateAssignedSet);
 initializeId();
 $("start").addEventListener("click",start);
 $("next").addEventListener("click",()=>{if(!running)return;completedRows++;lastChecked=-1;markMode=false;$("markMsg").textContent="";if(completedRows>=60){finish();return}render()});
 $("mark").addEventListener("click",()=>{if(!running)return;markMode=true;$("markMsg").textContent="最後に確認した数字をクリックしてください（選択状態は変わりません）。"});
 $("end").addEventListener("click",()=>{if(running&&confirm("課題を終了しますか？ 現在の行を途中まで確認した場合は、先に最後の確認位置を指定してください。"))finish()});
-$("restart").addEventListener("click",()=>{$("results").classList.add("hidden");$("setup").classList.remove("hidden");$("setupMsg").textContent=""});
-$("send").addEventListener("click",async()=>{if(!record)return;const btn=$("send");btn.disabled=true;$("sendMsg").textContent="送信中…";try{await fetch(SHEET_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({payload:JSON.stringify(record)}).toString()});$("sendMsg").textContent="送信リクエストを出しました。Googleスプレッドシートで記録を確認してください（ブラウザーから受信成功は判定できません）。";}catch(err){btn.disabled=false;$("sendMsg").textContent="送信できませんでした。通信状態を確認して再試行してください。";}});
+$("restart").addEventListener("click",()=>{if(!state.preSent||state.post)return;$("results").classList.add("hidden");$("setup").classList.remove("hidden");$("setupMsg").textContent="事前測定は終了しています。先生の指示があれば事後測定を開始してください。";updateAssignedSet()});
+$("send").addEventListener("click",async()=>{if(!record)return;const btn=$("send");btn.disabled=true;$("sendMsg").textContent="送信中…";try{await fetch(SHEET_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({payload:JSON.stringify(record)}).toString()});$("sendMsg").textContent="送信リクエストを出しました（Google側の保存成功は未確認です）。";if(record.phase==="pre")state.preSent=true;else state.postSent=true;saveState();$("restart").disabled=record.phase!=="pre";}catch(err){btn.disabled=false;$("sendMsg").textContent="送信できませんでした。通信状態を確認して再試行してください。";}});
 $("csv").addEventListener("click",()=>{if(!record)return;const keys=Object.keys(record);const quote=v=>{const str=String(v);return /[",\r\n]/.test(str)?"\""+str.replace(/"/g,'""')+"\"":str};const data=keys.map(quote).join(",")+"\r\n"+keys.map(k=>quote(record[k])).join(",")+"\r\n";const url=URL.createObjectURL(new Blob([data],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="attention_"+record.participant.replace(/[^a-zA-Z0-9_-]/g,"_")+"_"+record.phase+"_"+record.set+".csv";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 window.addEventListener("beforeunload",e=>{if(running){e.preventDefault();e.returnValue=""}});
 })();
