@@ -57,7 +57,7 @@ function restoreProgress(){
  else if(state.pre){$("setupMsg").textContent="事前測定は保存済みです。先生の指示があれば事後測定を開始してください。";}
 }
 function seeded(seed){let x=seed>>>0;return function(){x=(1664525*x+1013904223)>>>0;return x/4294967296}}
-function makeSet(name){const a=Array.from({length:TOTAL},(_,i)=>i<120?3:i<240?7:(i%8<6?i%8:i%8+2)); // 240 targets, 960 distractors
+function makeSet(name){const a=Array.from({length:TOTAL},(_,i)=>i<120?3:i<240?7:([0,1,2,4,5,6,8,9][i%8])); // 240 targets, 960 distractors
  const rand=seeded(name==="A"?1357911:name==="B"?2468022:9753186);
  for(let i=a.length-1;i>0;i--){let j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function saveTaskProgress(){if(!running||practicing)return;state.activeProgress={completedRows,selected:[...selected]};saveState()}
