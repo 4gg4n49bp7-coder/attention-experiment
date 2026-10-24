@@ -57,9 +57,27 @@ function restoreProgress(){
  else if(state.pre){$("setupMsg").textContent="事前測定は保存済みです。先生の指示があれば事後測定を開始してください。";}
 }
 function seeded(seed){let x=seed>>>0;return function(){x=(1664525*x+1013904223)>>>0;return x/4294967296}}
-function makeSet(name){const a=Array.from({length:TOTAL},(_,i)=>i<120?3:i<240?7:([0,1,2,4,5,6,8,9][i%8])); // 240 targets, 960 distractors
+function makeSet(name){
  const rand=seeded(name==="A"?1357911:name==="B"?2468022:9753186);
- for(let i=a.length-1;i>0;i--){let j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+ // Both forms share a variable target count per row (2–6), totaling 240.
+ const counts=[];for(let i=0;i<12;i++)counts.push(2,3,4,5,6);
+ const countRand=seeded(8642097);
+ for(let i=counts.length-1;i>0;i--){const j=Math.floor(countRand()*(i+1));[counts[i],counts[j]]=[counts[j],counts[i]]}
+ const digits=[];let threes=0,sevens=0;
+ for(let row=0;row<60;row++){
+  const n=counts[row],targets=[];
+  for(let j=0;j<n;j++){
+   const remaining3=120-threes,remaining7=120-sevens;
+   const digit=rand()<(remaining3/(remaining3+remaining7))?3:7;
+   targets.push(digit);if(digit===3)threes++;else sevens++;
+  }
+  const distractors=[0,1,2,4,5,6,8,9];
+  const line=targets.concat(Array.from({length:20-n},()=>distractors[Math.floor(rand()*distractors.length)]));
+  for(let i=line.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[line[i],line[j]]=[line[j],line[i]]}
+  digits.push(...line);
+ }
+ return digits;
+}
 function saveTaskProgress(){if(!running||practicing)return;state.activeProgress={completedRows,selected:[...selected]};saveState()}
 function render(){const row=completedRows; $("rowTitle").textContent="第"+(row+1)+"行";$("progress").textContent=(row+1)+" / 60行";$("digits").replaceChildren();
  const frag=document.createDocumentFragment();
