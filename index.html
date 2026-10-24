@@ -96,8 +96,8 @@ function finish(endReason="通常終了"){if(!running)return;resetNextLock();run
 function showResults(){
  $("setup").classList.add("hidden");$("task").classList.add("hidden");$("results").classList.remove("hidden");
  $("restart").disabled=true;$("send").disabled=true;$("csv").classList.add("hidden");$("restart").textContent=record.phase==="pre"?"事後測定へ進む":"全測定終了";
- const table=document.createElement("table");const labels={participant:"参加者ID",set:"課題セット",phase:"測定時点",duration_seconds:"実施秒数",end_reason:"終了区分",reload_count:"リロード・再開回数",processed:"確認済み数字数",unprocessed:"未処理数字数",targets_in_processed:"確認済み範囲の標的数",correct:"正しく選択した標的数",missed:"見逃し数",wrong:"誤選択数",accuracy:"標的検出率（参考・%）",timestamp:"実施日時"};
- for(const [key,label] of Object.entries(labels)){const tr=document.createElement("tr"),th=document.createElement("th"),td=document.createElement("td");th.textContent=label;td.textContent=record[key];tr.append(th,td);table.appendChild(tr)}$("summary").replaceChildren(table)}
+ $("summary").textContent=record.phase==="pre"?"事前測定が終了しました。保存完了後、先生の指示を待ってください。":"事後測定が終了しました。";}
+
 initializeId();
 $("practiceStart").addEventListener("click",startPractice);
 $("start").addEventListener("click",()=>start());
