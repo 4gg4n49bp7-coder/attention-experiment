@@ -96,7 +96,23 @@ function finish(endReason="通常終了"){if(!running)return;resetNextLock();run
 function showResults(){
  $("setup").classList.add("hidden");$("task").classList.add("hidden");$("results").classList.remove("hidden");
  $("restart").disabled=true;$("send").disabled=true;$("csv").classList.add("hidden");$("restart").textContent=record.phase==="pre"?"事後測定へ進む":"全測定終了";
- $("summary").textContent=record.phase==="pre"?"事前測定が終了しました。保存完了後、先生の指示を待ってください。":"事後測定が終了しました。";}
+ const summary=$("summary");summary.replaceChildren();
+ if(record.phase==="pre"){summary.textContent="事前測定が終了しました。保存完了後、先生の指示を待ってください。";return}
+ const heading=document.createElement("p");heading.textContent="事前・事後測定の結果";summary.appendChild(heading);
+ const table=document.createElement("table");
+ const header=document.createElement("tr");
+ for(const label of ["項目","事前","事後","変化（事後−事前）"]){const th=document.createElement("th");th.textContent=label;header.appendChild(th)}
+ table.appendChild(header);
+ const pre=state.pre,post=state.post;
+ for(const [label,key] of [["処理数","processed"],["正答数","correct"],["見逃し数","missed"],["誤選択数","wrong"],["標的検出率（%）","accuracy"]]){
+  const tr=document.createElement("tr"),v1=Number(pre?.[key]),v2=Number(post?.[key]);
+  for(const value of [label,pre?.[key]??"—",post?.[key]??"—",Number.isFinite(v1)&&Number.isFinite(v2)?(v2-v1).toFixed(key==="accuracy"?2:0):"—"]){
+   const td=document.createElement("td");td.textContent=String(value);tr.appendChild(td)
+  }
+  table.appendChild(tr);
+ }
+ summary.appendChild(table);
+}
 
 initializeId();
 $("practiceStart").addEventListener("click",startPractice);
